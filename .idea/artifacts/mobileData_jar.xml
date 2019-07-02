@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="mobileData.jar">
+    <output-path>$USER_HOME$/wx/mobileData.jar</output-path>
+    <root id="archive" name="mobileData.jar">
+      <element id="module-output" name="mobileData" />
+    </root>
+  </artifact>
+</component>
