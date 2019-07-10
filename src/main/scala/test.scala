@@ -435,12 +435,13 @@ object test {
 //     out._2.map(x=>x.lng+","+x.lat+","+x.dStart+","+x.dEnd+","+"Stop").foreach(println)
 //     out._3.map(x=>x.lng+","+x.lat+","+x.dmove+","+"Move").foreach(println)
 
+    for ( i <- 4 to 7){
+      var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/activeData/"+i+"/*")
+      var rdd2 = rdd1.map(x=>(x.split(",")(0), parse(x))).groupByKey().map(x=>tDbscanAndJudgeAttri(x, 1000.0, time, 2))
+      var idStopPoints = rdd2.map(x => (x._1,x._2)).filter(x => x._2.size>0).repartition(10).flatMap(x => x._2 map(x._1 -> _)).map(x=>x._1+","+x._2.toString)
+      idStopPoints.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/clusterRes/"+i)
+    }
 
-    var i = 3
-    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/activeData/"+i+"/*")
-    var rdd2 = rdd1.map(x=>(x.split(",")(0), parse(x))).groupByKey().map(x=>tDbscanAndJudgeAttri(x, 1000.0, time, 2))
-    var idStopPoints = rdd2.map(x => (x._1,x._2)).filter(x => x._2.size>0).repartition(10).flatMap(x => x._2 map(x._1 -> _)).map(x=>x._1+","+x._2.toString)
-    idStopPoints.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/clusterRes/"+i)
 
 
   }
