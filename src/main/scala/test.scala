@@ -349,6 +349,98 @@ object test {
     //用户id,停留点集合,移动点集合
     (line._1,stop,move)
   }
+/**
+  * 第二次聚类，时间条件放宽松，距离条件要求严格一些
+  * 多天的结果进行聚类
+  *
+  * */
+
+  def tDbscanSecond(line:(String,Iterable[cellData]),spatial_threshold:Double,
+                           temporal_threshold:Long,min_neighbors:Int) ={
+    var index= -1
+    var clusterIndex=0
+    var stack=new mutable.Stack[Int]()
+    /*
+      -1表示为未标记
+      0表示离群点
+      1....n表示簇集的id
+     */
+    val df=line._2.map { x =>
+      val kind = Array(-1)
+      index+=1
+      (index,x.date,x.lng,x.lat,kind)
+    }.toArray
+
+    for(data<-df)
+    {
+      if(data._5(0) == -1) {
+        var neighbor = retrieve_neighborsT(data._1, df, spatial_threshold, temporal_threshold)
+        if(neighbor.length<min_neighbors)
+          data._5(0)=0
+        else if(neighbor(neighbor.length-1)._2.getTime-neighbor
+        (0)._2.getTime<temporal_threshold)
+          data._5(0)=0
+        else{
+          //          neighbor.remove(data._1)
+          clusterIndex+=1
+          data._5(0)=clusterIndex
+
+          for(dataNeighbor<-neighbor)
+          {
+            dataNeighbor._5(0)=clusterIndex
+            stack.push(dataNeighbor._1)
+          }
+          while (stack.isEmpty==false)
+          {
+            val cur=stack.pop()
+            val newNeighbor=retrieve_neighborsT(cur,df,
+              spatial_threshold,temporal_threshold
+            )
+            if(newNeighbor.length>=min_neighbors)
+            {
+              for(s<-newNeighbor)
+              {
+                if(s._5(0)== -1||s._5(0)==0)
+                {
+                  s._5(0)=clusterIndex
+                  stack.push(s._1)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    /*
+      输出格式：
+      停留点：（中心lng,中心lat,(停留开始时间，停留结束时间)，STOP）
+      移动点： (lng,lat,（移动发生时间，移动发生时间）,MOVE)
+     */
+    val stop=df.groupBy(x=>x._5(0)).filter(x=>x._1!=0).map{x=>
+      var clng=0.0
+      var clat=0.0
+      val l=x._2.sortBy(t=>t._2)
+      for(y<-l)
+      {
+        clng+=y._3
+        clat+=y._4
+      }
+      // 是工作还是在家 通过拼接的key 进行得到
+      new stopPoint(clng/l.length,clat/l.length,l(0)._2,l(l.length-1)._2,
+        line._1.split("_")(1))
+    }
+
+    val move=df.filter(x=>x._5(0)==0).map{
+      x=>
+        movePoint(x._3,x._4,x._2)
+    }
+    //用户id,停留点集合,移动点集合
+    (line._1,stop,move)
+  }
+
+
+
+
 
   def convertDay(line:(String,Iterable[Int])): Tuple2[String,Int] =
   {
@@ -415,31 +507,56 @@ object test {
     cellData(id,date,lng,lat)
   }
 
+  def parseClusterRes(line: String) ={
+    var items = line.split(",")
+    val id = items(0)
+    val lng = items(1).toDouble
+    val lat = items(2).toDouble
+    val dateStart = new Date(items(3).replace("CST",""))
+    val dateEnd = new Date(items(4).replace("CST",""))
+    val attr = items(5)
+    var newKey = id+"_"+attr
+    ( newKey, cellData(id, dateStart, lng, lat) )
+//    ( newKey, new stopPoint(lng, lat, dateStart, dateEnd, attr))
+  }
+
   def main(args: Array[String]): Unit = {
-    val conf=new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory","16g").set("spark.executor.cores","16")
-    val sc=new SparkContext(conf)
-//    val test=Source.fromFile("/home/weixiang/mobileData/test.csv").getLines().toArray.map(x=>parse(x))
-    val time=30*60*1000
-//    var out = tDbscanAndJudgeAttri(("953992078156549240",test),1000.0,time,2)
-//    println(out)
+    val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "16g").set("spark.executor.cores", "16")
+    val sc = new SparkContext(conf)
+    //    val test=Source.fromFile("/home/weixiang/mobileData/test.csv").getLines().toArray.map(x=>parse(x))
+    val time = 30 * 60 * 1000
+    //    var out = tDbscanAndJudgeAttri(("953992078156549240",test),1000.0,time,2)
+    //    println(out)
 
-///    val out=tDbscanAndJudgeAttriTest(("123",test),1000.0,time,2)
-//     for(s<-out._2)
-//      {
-//         println(s._1+","+s._2+","+s._3+","+s._4+","+s._5(0))
-//
-//     }
-//     out._2.foreach(println)
-//     out._3.foreach(println)
-//     out._2.map(x=>x.lng+","+x.lat+","+x.dStart+","+x.dEnd+","+"Stop").foreach(println)
-//     out._3.map(x=>x.lng+","+x.lat+","+x.dmove+","+"Move").foreach(println)
+    ///    val out=tDbscanAndJudgeAttriTest(("123",test),1000.0,time,2)
+    //     for(s<-out._2)
+    //      {
+    //         println(s._1+","+s._2+","+s._3+","+s._4+","+s._5(0))
+    //
+    //     }
+    //     out._2.foreach(println)
+    //     out._3.foreach(println)
+    //     out._2.map(x=>x.lng+","+x.lat+","+x.dStart+","+x.dEnd+","+"Stop").foreach(println)
+    //     out._3.map(x=>x.lng+","+x.lat+","+x.dmove+","+"Move").foreach(println)
+    var activeContinue = sc.textFile("hdfs://bigdata01:9000/home/wx/test/activeContinue").collect().toList
+    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/clusterRes/*/*")
+    var rdd2 = rdd1.filter( x=> activeContinue.contains(x.split(",")(0)) ).map( x => parseClusterRes(x)).groupByKey(5)
+      .map( x=> tDbscanSecond(x, 500.0, time*300,2) )
+    var stopAll = rdd2.map(x => (x._1, x._2)).filter(x => x._2.size > 0).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
+      .map(x => x._1 + "," + x._2.toString + "," + x._1.split("_")(1))
+    var moveAll = rdd2.map(x => (x._1,x._3)).filter(x => x._2.size > 0).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
+      .map(x => x._1 + "," + x._2.toString + "," + x._1.split("_")(1))
+    var onlyStop = rdd2.filter(x => x._2.size > 0 && x._3.size <= 0).map(x => (x._1, x._2)).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
+      .map(x => x._1 + "," + x._2.toString + "," + x._1.split("_")(1))
+    var onlyMove = rdd2.filter(x => x._2.size <= 0 && x._3.size > 0).map( x => (x._1, x._3)).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
+      .map(x => x._1 + "," + x._2.toString + "," + x._1.split("_")(1))
 
-    for ( i <- 4 to 7){
-      var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/activeData/"+i+"/*")
-      var rdd2 = rdd1.map(x=>(x.split(",")(0), parse(x))).groupByKey().map(x=>tDbscanAndJudgeAttri(x, 1000.0, time, 2))
-      var idStopPoints = rdd2.map(x => (x._1,x._2)).filter(x => x._2.size>0).repartition(10).flatMap(x => x._2 map(x._1 -> _)).map(x=>x._1+","+x._2.toString)
-      idStopPoints.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/clusterRes/"+i)
-    }
+    stopAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/stopAll")
+    moveAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/moveAll")
+    onlyStop.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/onlyStop")
+    onlyMove.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/onlyMove")
+
+  }
 
 
 
