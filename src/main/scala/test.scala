@@ -416,7 +416,6 @@ object test {
   }
 
   def main(args: Array[String]): Unit = {
-
     val conf=new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory","16g").set("spark.executor.cores","16")
     val sc=new SparkContext(conf)
 //    val test=Source.fromFile("/home/weixiang/mobileData/test.csv").getLines().toArray.map(x=>parse(x))
@@ -444,5 +443,4 @@ object test {
 
 
 
-  }
 }
