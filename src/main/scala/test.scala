@@ -266,7 +266,11 @@ object test {
   }
 
   case class cellData(id:String,date: Date,lng:Double,lat:Double)
-  case class movePoint(lng:Double,lat:Double,dmove:Date)
+  case class movePoint(lng:Double,lat:Double,dmove:Date){
+    override def toString: String = {
+      lng+","+lat+","+dmove
+    }
+  }
 
   def tDbscanAndJudgeAttri(line:(String,Iterable[cellData]),spatial_threshold:Double,
                            temporal_threshold:Long,min_neighbors:Int) ={
@@ -377,9 +381,9 @@ object test {
         var neighbor = retrieve_neighborsT(data._1, df, spatial_threshold, temporal_threshold)
         if(neighbor.length<min_neighbors)
           data._5(0)=0
-        else if(neighbor(neighbor.length-1)._2.getTime-neighbor
-        (0)._2.getTime<temporal_threshold)
-          data._5(0)=0
+//        else if(neighbor(neighbor.length-1)._2.getTime-neighbor
+//        (0)._2.getTime<temporal_threshold)
+//          data._5(0)=0
         else{
           //          neighbor.remove(data._1)
           clusterIndex+=1
@@ -521,7 +525,7 @@ object test {
   }
 
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "16g").set("spark.executor.cores", "16")
+    val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "32g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
     //    val test=Source.fromFile("/home/weixiang/mobileData/test.csv").getLines().toArray.map(x=>parse(x))
     val time = 30 * 60 * 1000
@@ -538,9 +542,11 @@ object test {
     //     out._3.foreach(println)
     //     out._2.map(x=>x.lng+","+x.lat+","+x.dStart+","+x.dEnd+","+"Stop").foreach(println)
     //     out._3.map(x=>x.lng+","+x.lat+","+x.dmove+","+"Move").foreach(println)
-    var activeContinue = sc.textFile("hdfs://bigdata01:9000/home/wx/test/activeContinue").collect().toList
+
+
+//    var activeContinue = sc.textFile("/home/weixiang/continueActive").collect()
     var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/clusterRes/*/*")
-    var rdd2 = rdd1.filter( x=> activeContinue.contains(x.split(",")(0)) ).map( x => parseClusterRes(x)).groupByKey(5)
+    var rdd2 = rdd1.map( x => parseClusterRes(x)).groupByKey(5)
       .map( x=> tDbscanSecond(x, 500.0, time*300,2) )
     var stopAll = rdd2.map(x => (x._1, x._2)).filter(x => x._2.size > 0).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
       .map(x => x._1 + "," + x._2.toString + "," + x._1.split("_")(1))
