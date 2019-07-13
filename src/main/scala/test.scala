@@ -257,9 +257,9 @@ object test {
     }
     res+=df(index_center)
     res.sortBy(x=>x._2)
-    if(res(res.length-1)._2.getTime-res(0)._2.getTime<temporal_threshold)
-      empty
-    else if(res.length<2)
+//    if(res(res.length-1)._2.getTime-res(0)._2.getTime<temporal_threshold)  // 不关心时间
+//      empty
+    if(res.length<2)
       empty
     else
       res.filter(x=>x._1!=index_center)
