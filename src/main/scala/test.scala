@@ -221,6 +221,30 @@ object test {
     s
   }
 
+  /***
+    * 不考虑时间进行neighbors检测
+    */
+  def retrieve_neighbors(index_center:Int, df:Array[(Int,Date,Double,Double,Array[Int])],spatial_threshold:Double) ={
+    val res=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
+    val empty=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
+    var i = 0
+    while(i<df.length){
+      if (i==index_center) {
+        i+=1
+      }
+      else {
+        if (calcDis(df(i)._3, df(i)._4, df(index_center)._3, df(index_center)._4)<=spatial_threshold) {
+          res+=df(i)
+        }
+        i+=1
+      }
+    }
+
+    if (res.length<1)
+      empty
+    else
+      res.sortBy( x => x._2)
+  }
 
 
   def retrieve_neighborsT(index_center:Int, df:Array[(Int,Date,Double,Double,Array[Int])],
@@ -356,6 +380,7 @@ object test {
 /**
   * 第二次聚类，时间条件放宽松，距离条件要求严格一些
   * 多天的结果进行聚类
+  * 这个时间条件根本没用，留着他是为了和原函数保持参数一致
   *
   * */
 
@@ -378,7 +403,7 @@ object test {
     for(data<-df)
     {
       if(data._5(0) == -1) {
-        var neighbor = retrieve_neighborsT(data._1, df, spatial_threshold, temporal_threshold)
+        var neighbor = retrieve_neighbors(data._1, df, spatial_threshold)
         if(neighbor.length<min_neighbors)
           data._5(0)=0
 //        else if(neighbor(neighbor.length-1)._2.getTime-neighbor
@@ -397,9 +422,7 @@ object test {
           while (stack.isEmpty==false)
           {
             val cur=stack.pop()
-            val newNeighbor=retrieve_neighborsT(cur,df,
-              spatial_threshold,temporal_threshold
-            )
+            val newNeighbor=retrieve_neighbors(cur,df, spatial_threshold)
             if(newNeighbor.length>=min_neighbors)
             {
               for(s<-newNeighbor)
@@ -557,10 +580,10 @@ object test {
     var onlyMove = rdd2.filter(x => x._2.size <= 0 && x._3.size > 0).map( x => (x._1, x._3)).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
       .map(x => x._1.split("_")(0) + "," + x._2.toString + "," + x._1.split("_")(1))
 
-    stopAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/stopAll")
-    moveAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/moveAll")
-    onlyStop.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/onlyStop")
-    onlyMove.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/onlyMove")
+    stopAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/stopAll")
+    moveAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/moveAll")
+    onlyStop.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/onlyStop")
+    onlyMove.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/onlyMove")
 
   }
 
