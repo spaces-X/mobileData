@@ -524,6 +524,24 @@ object test {
 //    ( newKey, new stopPoint(lng, lat, dateStart, dateEnd, attr))
   }
 
+  def analyResults(line: Iterable[String]) ={
+    var home = 0
+    var work = 0
+    var unknow = 0
+    for ( attr<-line ) {
+      if (attr.equals("home")) {
+        home += 1
+      }
+      else if (attr.equals("work")) {
+        work += 1
+      }
+      else if (attr.equals("unkown")) {
+        unknow += 1
+      }
+    }
+    (home,work,unknow)
+  }
+
   def main(args: Array[String]): Unit = {
     val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "32g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
@@ -545,22 +563,32 @@ object test {
 
 
 //    var activeContinue = sc.textFile("/home/weixiang/continueActive").collect()
-    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/clusterRes/*/*")
-    var rdd2 = rdd1.map( x => parseClusterRes(x)).groupByKey(5)
-      .map( x=> tDbscanSecond(x, 500.0, time*300,2) )
-    var stopAll = rdd2.map(x => (x._1, x._2)).filter(x => x._2.size > 0).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString )
-    var moveAll = rdd2.map(x => (x._1,x._3)).filter(x => x._2.size > 0).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString + "," + x._1.split("_")(1))
-    var onlyStop = rdd2.filter(x => x._2.size > 0 && x._3.size <= 0).map(x => (x._1, x._2)).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString )
-    var onlyMove = rdd2.filter(x => x._2.size <= 0 && x._3.size > 0).map( x => (x._1, x._3)).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString + "," + x._1.split("_")(1))
+    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/stopAll/*")
+    var rdd2 = rdd1.map( x=> (x.split(",")(0),x.split(",")(5))).groupByKey(5).mapValues( x=> analyResults(x))
+    // home work unkown
+    var oneoneAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 )
+    var oneoneone = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 && x._2._3 == 1)
+    var oneZeroZero = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 0 && x._2._3 == 0)
+    var manyoneAny = rdd2.filter(x => x._2._1 > 1 && x._2._2 == 1)
+    var onemanyAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 > 1 )
 
-    stopAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/stopAll")
-    moveAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/moveAll")
-    onlyStop.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/onlyStop")
-    onlyMove.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/onlyMove")
+    var anyanyOne = rdd2.filter(x => x._2._3 == 1)
+    var anyanyZero = rdd2.filter(x => x._2._3 ==0)
+    var anyanyMany = rdd2.filter(x => x._2._3>0)
+    List[String] sl = new ListBuffer[String]
+    sl+="oneoneAny: " + oneoneAny.count()
+    sl+="oneoneone: " + oneoneone.count()
+    sl+="oneZeroZero: " + oneZeroZero.count()
+    sl+="manyoneAny: " + manyoneAny.count()
+    sl+="onemanyAny: " + onemanyAny.count()
+    sl+="anyanyOne: " + anyanyOne.count()
+    sl+="anyanyZero: " + anyanyZero.count()
+    sl+="anyanyMany: " + anyanyMany.count()
+    sl+="ALL: " + rdd2.count()
+
+    var results = sc.parallelize(sl,1)
+    results.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/AnalysisRes/stopAll")
+
 
   }
 
