@@ -563,7 +563,7 @@ object test {
 
 
 //    var activeContinue = sc.textFile("/home/weixiang/continueActive").collect()
-    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/stopAll/*")
+    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/stopAll/*")
     var rdd2 = rdd1.map( x=> (x.split(",")(0),x.split(",")(5))).groupByKey(5).mapValues( x=> analyResults(x))
     // home work unkown
     var oneoneAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 )
@@ -575,7 +575,7 @@ object test {
     var anyanyOne = rdd2.filter(x => x._2._3 == 1)
     var anyanyZero = rdd2.filter(x => x._2._3 ==0)
     var anyanyMany = rdd2.filter(x => x._2._3>0)
-    List[String] sl = new ListBuffer[String]
+    var sl = new ListBuffer[String]
     sl+="oneoneAny: " + oneoneAny.count()
     sl+="oneoneone: " + oneoneone.count()
     sl+="oneZeroZero: " + oneZeroZero.count()
@@ -587,7 +587,9 @@ object test {
     sl+="ALL: " + rdd2.count()
 
     var results = sc.parallelize(sl,1)
-    results.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/AnalysisRes/stopAll")
+    results.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/AnalysisResN2")
+    rdd2.repartition(1).map(x=>x._1+","+x._2._1+","+x._2._2+","+x._2._3)
+      .saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/AnalysisResN2/stopAll")
 
 
   }
