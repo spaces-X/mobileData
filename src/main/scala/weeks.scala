@@ -13,6 +13,7 @@ import scala.util.control.Breaks
 
 object weeks {
 
+  var calendar = Calendar.getInstance()
   case class stableStopPoint(plng:Double, plat:Double, times:Iterable[(Date,Date)]) {
     override def toString: String = {
       var line = new StringBuilder()
@@ -175,21 +176,53 @@ object weeks {
   }
 
   /**
+    * 从ActiveData 中读取数据,并转换成(id,cellData)
+    * @param line
+    * @return
+    */
+  def parseActiveData(line: String) :(String,cellData) = {
+    var items = line.split(",")
+    val id = items(0)
+    val date = new Date(items(1).replace("CST",""))
+    val lng = items(2).toDouble
+    val lat = items(3).toDouble
+    (id, cellData(id,date,lng,lat))
+  }
+
+  /**
     * 将第一次聚类的结果进行过滤，至少n天都有停留点
     * @param data
     * @param n
     * @return
     */
-  def continueFilter(data: (String,Iterable[stopPoint]) ,n: Int): Boolean = {
+  def continueStopPoint(data: (String,Iterable[stopPoint]), n: Int): Boolean = {
     var stopPoints = data._2
-    var cl = Calendar.getInstance()
+//    var cl = Calendar.getInstance()
     var DaySet = mutable.Set[Int]()
     for( s <- stopPoints){
-      cl.setTime(s.dStart)
-      var day = cl.get(Calendar.DAY_OF_MONTH)
+      calendar.setTime(s.dStart)
+      var day = calendar.get(Calendar.DAY_OF_MONTH)
       DaySet.add(day)
     }
     DaySet.size>=n
+  }
+
+  /**
+    * 将预处理后并且活跃的数据作为输入, 提取大于n天活跃的用户
+    * @param data
+    * @param n
+    * @return
+    */
+  def continueCell(data:(String, Iterable[cellData]), n:Int) :Boolean = {
+    var cellDatas = data._2
+    var DaySet = mutable.Set[Int]()
+    for (data <- cellDatas) {
+      calendar.setTime(data.date)
+      var day = calendar.get(Calendar.DAY_OF_MONTH)
+      DaySet.add(day)
+    }
+    DaySet.size >= n
+
   }
 
 
@@ -197,12 +230,31 @@ object weeks {
     val conf = new SparkConf().setAppName("weeks").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "100g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
     /**
-      * 挑选活跃用户代码
+      * 挑选多天活跃用户代码
       */
-    var data = sc.textFile("hdfs:bigdata01:9000/...")
-    var groupedBykey = data.map(x => parseClusterRes(x)).groupByKey(5)
-    var filtered = groupedBykey.filter( x => continueFilter(x,5))
-    var activeData = filtered.flatMapValues(x => x.toArray)
+    var data = sc.textFile("hdfs://bigdata01:9000/home/wx/test/activeData/*/*")
+    var groupedBykey = data.map(x => parseActiveData(x)).groupByKey()
+    var filtered = groupedBykey.filter( x => continueCell(x,5))
+    var activeData = filtered.flatMapValues(x => x)
+
+    for ( i<- 3 to 14) {
+      if (i==8 || i==9){
+        // do nothing
+      } else {
+        var tmp = activeData.filter{
+          x=>
+            calendar.setTime(x._2.date)
+            var day = calendar.get(Calendar.DAY_OF_MONTH)
+            day == i
+        }
+        var res = tmp.repartition(5).map(x => x._2.toString)
+        res.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/continueActive/"+i)
+      }
+    }
+    var conActiveUsersCount = activeData.count()
+    var count = sc.parallelize(Array(conActiveUsersCount))
+    count.saveAsTextFile("/home/wx/test/continueActive/userscount")
+
 
 
   }

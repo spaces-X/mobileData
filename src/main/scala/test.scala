@@ -289,7 +289,11 @@ object test {
       res.filter(x=>x._1!=index_center)
   }
 
-  case class cellData(id:String,date: Date,lng:Double,lat:Double)
+  case class cellData(id:String,date: Date,lng:Double,lat:Double) {
+    override def toString: String = {
+      id + "," + date.toString + "," + lng + "," + lat
+    }
+  }
   case class movePoint(lng:Double,lat:Double,dmove:Date){
     override def toString: String = {
       lng+","+lat+","+dmove
@@ -555,7 +559,7 @@ object test {
      var rdd = sc.textFile("/home/xw/201411"+ i + "-raw/*")
      var rdd1 = rdd.filter(x=>judgeData(x)).filter(x=>(x.split(",")(2)).substring(6,8).equals(i.toString))
      var rdd2 = rdd1.map(x=>(x.split(",")(0),x)).groupByKey().map(x=>sortByTime(x)).
-       filter(x=>judgeUserV2(x)).map(x=>deleteShakeV3(x))
+       filter(x=>judgeUserV2(x)).map(x=>deleteShakeV3(x)).repartition(5)
 
      rdd2.filter(x => x._2.size> 30).
        map{x=>
