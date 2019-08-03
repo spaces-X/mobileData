@@ -548,42 +548,36 @@ object test {
   }
 
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "32g").set("spark.executor.cores", "32")
+    val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "128g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
     //    val test=Source.fromFile("/home/weixiang/mobileData/test.csv").getLines().toArray.map(x=>parse(x))
-    val time = 30 * 60 * 1000
-    //    var out = tDbscanAndJudgeAttri(("953992078156549240",test),1000.0,time,2)
-    //    println(out)
+   for (i <- 10 to 14) {
+     var rdd = sc.textFile("/home/xw/201411"+ i + "-raw/*")
+     var rdd1 = rdd.filter(x=>judgeData(x)).filter(x=>(x.split(",")(2)).substring(6,8).equals(i.toString))
+     var rdd2 = rdd1.map(x=>(x.split(",")(0),x)).groupByKey().map(x=>sortByTime(x)).
+       filter(x=>judgeUserV2(x)).map(x=>deleteShakeV3(x))
 
-    ///    val out=tDbscanAndJudgeAttriTest(("123",test),1000.0,time,2)
-    //     for(s<-out._2)
-    //      {
-    //         println(s._1+","+s._2+","+s._3+","+s._4+","+s._5(0))
-    //
-    //     }
-    //     out._2.foreach(println)
-    //     out._3.foreach(println)
-    //     out._2.map(x=>x.lng+","+x.lat+","+x.dStart+","+x.dEnd+","+"Stop").foreach(println)
-    //     out._3.map(x=>x.lng+","+x.lat+","+x.dmove+","+"Move").foreach(println)
+     rdd2.filter(x => x._2.size> 30).
+       map{x=>
+         val res=new ListBuffer[String]
+         for(data<-x._2)
+         {
+           // id,time,lng,lat
+           res+=x._1+","+data._1+","+data._2+","+data._3
+         }
+         res
+       }.flatMap(x=>x).saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/activeData/"+i)
 
-
-//    var activeContinue = sc.textFile("/home/weixiang/continueActive").collect()
-    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/clusterRes/*/*")
-    var rdd2 = rdd1.map( x => parseClusterRes(x)).groupByKey(5)
-      .map( x=> tDbscanSecond(x, 500.0, time*300,2) )
-    var stopAll = rdd2.map(x => (x._1, x._2)).filter(x => x._2.size > 0).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString )
-    var moveAll = rdd2.map(x => (x._1,x._3)).filter(x => x._2.size > 0).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString + "," + x._1.split("_")(1))
-    var onlyStop = rdd2.filter(x => x._2.size > 0 && x._3.size <= 0).map(x => (x._1, x._2)).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString )
-    var onlyMove = rdd2.filter(x => x._2.size <= 0 && x._3.size > 0).map( x => (x._1, x._3)).repartition(5).sortByKey().flatMap( x=> x._2 map(x._1 -> _))
-      .map(x => x._1.split("_")(0) + "," + x._2.toString + "," + x._1.split("_")(1))
-
-    stopAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/stopAll")
-    moveAll.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/moveAll")
-    onlyStop.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/onlyStop")
-    onlyMove.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/onlyMove")
+     rdd2.map{x=>
+         val res=new ListBuffer[String]
+         for(data<-x._2)
+         {
+           // id,time,lng,lat
+           res+=x._1+","+data._1+","+data._2+","+data._3
+         }
+         res
+       }.flatMap(x=>x).saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/preProc/"+i)
+   }
 
   }
 
