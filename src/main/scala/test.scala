@@ -221,6 +221,30 @@ object test {
     s
   }
 
+  /***
+    * 不考虑时间进行neighbors检测
+    */
+  def retrieve_neighbors(index_center:Int, df:Array[(Int,Date,Double,Double,Array[Int])],spatial_threshold:Double) ={
+    val res=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
+    val empty=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
+    var i = 0
+    while(i<df.length){
+      if (i==index_center) {
+        i+=1
+      }
+      else {
+        if (calcDis(df(i)._3, df(i)._4, df(index_center)._3, df(index_center)._4)<=spatial_threshold) {
+          res+=df(i)
+        }
+        i+=1
+      }
+    }
+
+    if (res.length<1)
+      empty
+    else
+      res.sortBy( x => x._2)
+  }
 
 
   def retrieve_neighborsT(index_center:Int, df:Array[(Int,Date,Double,Double,Array[Int])],
@@ -265,7 +289,11 @@ object test {
       res.filter(x=>x._1!=index_center)
   }
 
-  case class cellData(id:String,date: Date,lng:Double,lat:Double)
+  case class cellData(id:String,date: Date,lng:Double,lat:Double) {
+    override def toString: String = {
+      id + "," + date.toString + "," + lng + "," + lat
+    }
+  }
   case class movePoint(lng:Double,lat:Double,dmove:Date){
     override def toString: String = {
       lng+","+lat+","+dmove
@@ -356,6 +384,7 @@ object test {
 /**
   * 第二次聚类，时间条件放宽松，距离条件要求严格一些
   * 多天的结果进行聚类
+  * 这个时间条件根本没用，留着他是为了和原函数保持参数一致
   *
   * */
 
@@ -378,7 +407,7 @@ object test {
     for(data<-df)
     {
       if(data._5(0) == -1) {
-        var neighbor = retrieve_neighborsT(data._1, df, spatial_threshold, temporal_threshold)
+        var neighbor = retrieve_neighbors(data._1, df, spatial_threshold)
         if(neighbor.length<min_neighbors)
           data._5(0)=0
 //        else if(neighbor(neighbor.length-1)._2.getTime-neighbor
@@ -397,9 +426,7 @@ object test {
           while (stack.isEmpty==false)
           {
             val cur=stack.pop()
-            val newNeighbor=retrieve_neighborsT(cur,df,
-              spatial_threshold,temporal_threshold
-            )
+            val newNeighbor=retrieve_neighbors(cur,df, spatial_threshold)
             if(newNeighbor.length>=min_neighbors)
             {
               for(s<-newNeighbor)
@@ -543,52 +570,36 @@ object test {
   }
 
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "32g").set("spark.executor.cores", "32")
+    val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "128g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
-    //    val test=Source.fromFile("/home/weixiang/mobileData/test.csv").getLines().toArray.map(x=>parse(x))
-    val time = 30 * 60 * 1000
-    //    var out = tDbscanAndJudgeAttri(("953992078156549240",test),1000.0,time,2)
-    //    println(out)
 
-    ///    val out=tDbscanAndJudgeAttriTest(("123",test),1000.0,time,2)
-    //     for(s<-out._2)
-    //      {
-    //         println(s._1+","+s._2+","+s._3+","+s._4+","+s._5(0))
-    //
-    //     }
-    //     out._2.foreach(println)
-    //     out._3.foreach(println)
-    //     out._2.map(x=>x.lng+","+x.lat+","+x.dStart+","+x.dEnd+","+"Stop").foreach(println)
-    //     out._3.map(x=>x.lng+","+x.lat+","+x.dmove+","+"Move").foreach(println)
+   for (i <- 10 to 14) {
+     var rdd = sc.textFile("/home/xw/201411"+ i + "-raw/*")
+     var rdd1 = rdd.filter(x=>judgeData(x)).filter(x=>(x.split(",")(2)).substring(6,8).equals(i.toString))
+     var rdd2 = rdd1.map(x=>(x.split(",")(0),x)).groupByKey().map(x=>sortByTime(x)).
+       filter(x=>judgeUserV2(x)).map(x=>deleteShakeV3(x)).repartition(5)
 
+     rdd2.filter(x => x._2.size> 30).
+       map{x=>
+         val res=new ListBuffer[String]
+         for(data<-x._2)
+         {
+           // id,time,lng,lat
+           res+=x._1+","+data._1+","+data._2+","+data._3
+         }
+         res
+       }.flatMap(x=>x).saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/activeData/"+i)
 
-//    var activeContinue = sc.textFile("/home/weixiang/continueActive").collect()
-    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/secondCluster/stopAll/*")
-    var rdd2 = rdd1.map( x=> (x.split(",")(0),x.split(",")(5))).groupByKey(5).mapValues( x=> analyResults(x))
-    // home work unkown
-    var oneoneAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 )
-    var oneoneone = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 && x._2._3 == 1)
-    var oneZeroZero = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 0 && x._2._3 == 0)
-    var manyoneAny = rdd2.filter(x => x._2._1 > 1 && x._2._2 == 1)
-    var onemanyAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 > 1 )
-
-    var anyanyOne = rdd2.filter(x => x._2._3 == 1)
-    var anyanyZero = rdd2.filter(x => x._2._3 ==0)
-    var anyanyMany = rdd2.filter(x => x._2._3>0)
-    List[String] sl = new ListBuffer[String]
-    sl+="oneoneAny: " + oneoneAny.count()
-    sl+="oneoneone: " + oneoneone.count()
-    sl+="oneZeroZero: " + oneZeroZero.count()
-    sl+="manyoneAny: " + manyoneAny.count()
-    sl+="onemanyAny: " + onemanyAny.count()
-    sl+="anyanyOne: " + anyanyOne.count()
-    sl+="anyanyZero: " + anyanyZero.count()
-    sl+="anyanyMany: " + anyanyMany.count()
-    sl+="ALL: " + rdd2.count()
-
-    var results = sc.parallelize(sl,1)
-    results.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/AnalysisRes/stopAll")
-
+     rdd2.map{x=>
+         val res=new ListBuffer[String]
+         for(data<-x._2)
+         {
+           // id,time,lng,lat
+           res+=x._1+","+data._1+","+data._2+","+data._3
+         }
+         res
+       }.flatMap(x=>x).saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/preProc/"+i)
+   }
 
   }
 
