@@ -1,20 +1,16 @@
 import java.text.SimpleDateFormat
-<<<<<<< HEAD
-=======
+
 import java.time.LocalDate
->>>>>>> master
+
 
 import scala.collection.mutable.ListBuffer
 import java.util.Date
 import java.util.Calendar
 
-<<<<<<< HEAD
-import org.apache.spark.{SparkConf, SparkContext}
-import test.{calcDis, cellData, movePoint, retrieve_neighbors}
-=======
+
 import org.apache.spark.{HashPartitioner, SparkConf, SparkContext}
-import test.{calcDis, cellData, movePoint, retrieve_neighbors, sortByTime}
->>>>>>> master
+import test.{calcDis, cellData, movePoint, retrieve_neighbors}
+
 
 import scala.collection.mutable
 import scala.io.Source
@@ -166,8 +162,7 @@ object weeks {
     (line._1,stop,move)
   }
 
-<<<<<<< HEAD
-=======
+
   def sortByDateTime(line:(String,Iterable[String])):(String,Iterable[String])={
     var ele=line._2.toArray
     val format=new SimpleDateFormat("yyyyMMddHHmmss")
@@ -175,7 +170,7 @@ object weeks {
     (line._1,ele.sortBy(x=>
      new Date((x.split(",")(1).replaceAll("CST","")))))
   }
->>>>>>> master
+
 
   /**
     * 从HDFS中读取第一次聚类的结果
@@ -235,10 +230,8 @@ object weeks {
   def continueCell(data:(String, Iterable[cellData]), n:Int) :Boolean = {
     var cellDatas = data._2
     var DaySet = mutable.Set[Int]()
-<<<<<<< HEAD
-=======
+
     DaySet.clear()
->>>>>>> master
     for (data <- cellDatas) {
       calendar.setTime(data.date)
       var day = calendar.get(Calendar.DAY_OF_MONTH)
