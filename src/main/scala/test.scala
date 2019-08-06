@@ -551,10 +551,28 @@ object test {
 //    ( newKey, new stopPoint(lng, lat, dateStart, dateEnd, attr))
   }
 
+  def analyResults(line: Iterable[String]) ={
+    var home = 0
+    var work = 0
+    var unknow = 0
+    for ( attr<-line ) {
+      if (attr.equals("home")) {
+        home += 1
+      }
+      else if (attr.equals("work")) {
+        work += 1
+      }
+      else if (attr.equals("unkown")) {
+        unknow += 1
+      }
+    }
+    (home,work,unknow)
+  }
+
   def main(args: Array[String]): Unit = {
     val conf = new SparkConf().setAppName("test").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "128g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
-    //    val test=Source.fromFile("/home/weixiang/mobileData/test.csv").getLines().toArray.map(x=>parse(x))
+
    for (i <- 10 to 14) {
      var rdd = sc.textFile("/home/xw/201411"+ i + "-raw/*")
      var rdd1 = rdd.filter(x=>judgeData(x)).filter(x=>(x.split(",")(2)).substring(6,8).equals(i.toString))
