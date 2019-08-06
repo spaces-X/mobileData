@@ -1,11 +1,12 @@
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 
 import scala.collection.mutable.ListBuffer
 import java.util.Date
 import java.util.Calendar
 
-import org.apache.spark.{SparkConf, SparkContext}
-import test.{calcDis, cellData, movePoint, retrieve_neighbors}
+import org.apache.spark.{HashPartitioner, SparkConf, SparkContext}
+import test.{calcDis, cellData, movePoint, retrieve_neighbors, sortByTime}
 
 import scala.collection.mutable
 import scala.io.Source
@@ -157,6 +158,13 @@ object weeks {
     (line._1,stop,move)
   }
 
+  def sortByDateTime(line:(String,Iterable[String])):(String,Iterable[String])={
+    var ele=line._2.toArray
+    val format=new SimpleDateFormat("yyyyMMddHHmmss")
+    var date = new Date()
+    (line._1,ele.sortBy(x=>
+     new Date((x.split(",")(1).replaceAll("CST","")))))
+  }
 
   /**
     * 从HDFS中读取第一次聚类的结果
@@ -216,6 +224,7 @@ object weeks {
   def continueCell(data:(String, Iterable[cellData]), n:Int) :Boolean = {
     var cellDatas = data._2
     var DaySet = mutable.Set[Int]()
+    DaySet.clear()
     for (data <- cellDatas) {
       calendar.setTime(data.date)
       var day = calendar.get(Calendar.DAY_OF_MONTH)
@@ -247,12 +256,14 @@ object weeks {
             var day = calendar.get(Calendar.DAY_OF_MONTH)
             day == i
         }
-        var res = tmp.repartition(5).map(x => x._2.toString)
+        var res = tmp.map(x=> (x._1,x._2.toString)).groupByKey(5).
+          map( x=>sortByDateTime(x)).flatMapValues(x => x).map(x=>x._2)
         res.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/continueActive/"+i)
       }
     }
     var conActiveUsersCount = activeData.count()
     var count = sc.parallelize(Array(conActiveUsersCount))
+
     count.saveAsTextFile("/home/wx/test/continueActive/userscount")
 
 
