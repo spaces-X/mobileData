@@ -9,7 +9,7 @@ import java.util.Calendar
 
 
 import org.apache.spark.{HashPartitioner, SparkConf, SparkContext}
-import test.{calcDis, cellData, movePoint, retrieve_neighbors}
+import test.{calcDis, cellData, movePoint, retrieve_neighbors, parse, tDbscanAndJudgeAttri}
 
 
 import scala.collection.mutable
@@ -246,31 +246,21 @@ object weeks {
     val conf = new SparkConf().setAppName("weeks").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "100g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
     /**
-      * 挑选多天活跃用户代码
+      * 两周的数据第一次聚类
       */
-    var data = sc.textFile("hdfs://bigdata01:9000/home/wx/test/activeData/*/*")
-    var groupedBykey = data.map(x => parseActiveData(x)).groupByKey()
-    var filtered = groupedBykey.filter( x => continueCell(x,5))
-    var activeData = filtered.flatMapValues(x => x)
-
+    var time = 30*60*1000
     for ( i<- 3 to 14) {
       if (i==8 || i==9){
         // do nothing
       } else {
-        var tmp = activeData.filter{
-          x=>
-            calendar.setTime(x._2.date)
-            var day = calendar.get(Calendar.DAY_OF_MONTH)
-            day == i
-        }
-        var res = tmp.map(x=> (x._1,x._2.toString)).groupByKey(5).
-          map( x=>sortByDateTime(x)).flatMapValues(x => x).map(x=>x._2)
-        res.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/continueActive/"+i)
+        var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/continueActive/"+i+"/*")
+        var rdd2 = rdd1.map(x=>(x.split(",")(0), parse(x))).groupByKey(5).map(x=>tDbscanAndJudgeAttri(x, 1000.0, time, 2))
+        var idStopPoints = rdd2.map(x => (x._1,x._2)).filter(x => x._2.size>0).flatMap(x => x._2 map(x._1 -> _)).map(x=>x._1+","+x._2.toString)
+        var idOnlyMove = rdd2.filter(x => x._2.size==0).map( x=> (x._1, x._3)).flatMapValues( x=>x).map(x=>x._1 + "," + x._2.toString)
+        idStopPoints.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterResults/stopAll/"+i)
+        idOnlyMove.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterResults/onlyMove/"+i)
       }
     }
-    var conActiveUsersCount = activeData.count()
-    var count = sc.parallelize(Array(conActiveUsersCount))
-    count.saveAsTextFile("/home/wx/test/continueActive/userscount")
 
 
 
