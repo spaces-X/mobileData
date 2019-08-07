@@ -9,7 +9,7 @@ import java.util.Calendar
 
 
 import org.apache.spark.{HashPartitioner, SparkConf, SparkContext}
-import test.{calcDis, cellData, movePoint, retrieve_neighbors, parse, tDbscanAndJudgeAttri}
+import test.{calcDis, cellData, movePoint, retrieve_neighbors, parse, tDbscanAndJudgeAttri,judgePointAttri}
 
 
 import scala.collection.mutable
@@ -19,25 +19,67 @@ import scala.util.control.Breaks
 object weeks {
 
   var calendar = Calendar.getInstance()
-  case class stableStopPoint(plng:Double, plat:Double, times:Iterable[(Date,Date)]) {
+  case class stableStopPoint(plng:Double, plat:Double,var attr:String="null",var daycount:String="NO" ,times:Iterable[(Date,Date)]) {
+    def this(plng:Double, plat:Double,times:Iterable[(Date,Date)])
+      = this(plng,plat,"null","NO",times)
     override def toString: String = {
       var line = new StringBuilder()
-      line.append(plng + ","+ plat + ",")
-      var len = times.toArray.length
+      attr = this.attributeJudge(times)
+      moreThan2Days(times)
+      line.append(plng + ","+ plat + ","+ attr + "," + daycount + ",")
+      var len = times.size
       line.append(len)
+      val format = new SimpleDateFormat("yyyyMMddHHmmss")
       if(len>0) {
-        line.append(",")
         for (time<-times){
-          line.append(time._1.toString + "," + time._2.toString)
+          line.append(",")
+          line.append(format.format(time._1) + "," + format.format(time._2))
         }
       }
       line.toString()
+    }
+    def attributeJudge(times: Iterable[(Date,Date)]): String = {
+      var unknown = 0
+      var home = 0
+      var work = 0
+      var result = "null"
+      for (d<-times) {
+        var result = judgePointAttri(d._1,d._2)
+        if (result.equals("work")) {
+          work+=1
+        }
+        else if (result.equals("home")) {
+          home+=1
+        }
+        else if (result.equals("unknown")) {
+          unknown+=1
+        }
+      }
+      if ((home==0 && work==0) || (work+home)*10 < unknown) {
+        result="unknown"
+      }
+      else if (home>= work){
+        result = "home"
+      }
+      else if (work> home) {
+        result = "work"
+      }
+      result
+    }
+    def moreThan2Days(times:Iterable[(Date,Date)]): Boolean = {
+      var daySet = Set[Int]()
+      for (s <- times) {
+        daySet+= s._1.getDate()
+      }
+      daycount = if (daySet.size >= 3) "YES" else "NO"
+      return daySet.size>=3
     }
   }
 
   case class temporaryStopPoint(plng:Double, plat:Double, dstart:Date, dend:Date) {
     override def toString: String = {
-      plng+","+plat+","+dstart.toString+","+dend.toString
+      var format = new SimpleDateFormat("yyyyMMddHHmmss")
+      plng+","+plat+","+format.format(dstart)+","+format.format(dend)
     }
   }
 
@@ -78,7 +120,7 @@ object weeks {
     * @param min_neighbors
     * @return
     */
-  def DbscanSecond(line:(String,Iterable[stopPoint]),spatial_threshold:Double,min_neighbors:Int) ={
+  def DbscanSecond(line:(String,Iterable[stopPoint]),spatial_threshold:Double,min_neighbors:Int) = {
     var index= -1
     var clusterIndex=0
     var stack=new mutable.Stack[Int]()
@@ -115,7 +157,7 @@ object weeks {
           while (stack.isEmpty==false)
           {
             val cur=stack.pop()
-            val newNeighbor=retrieve_neighbors_sp(cur,df, spatial_threshold)
+            val newNeighbor=retrieve_neighbors_sp(cur, df, spatial_threshold)
             if(newNeighbor.length>=min_neighbors)
             {
               for(s<-newNeighbor)
@@ -243,26 +285,28 @@ object weeks {
 
 
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf().setAppName("weeks").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "100g").set("spark.executor.cores", "32")
+    val conf = new SparkConf().setAppName("weeks").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "128g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
     /**
       * 两周的数据第一次聚类
       */
-    var time = 30*60*1000
-    for ( i<- 3 to 14) {
-      if (i==8 || i==9){
-        // do nothing
-      } else {
-        var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/continueActive/"+i+"/*")
-        var rdd2 = rdd1.map(x=>(x.split(",")(0), parse(x))).groupByKey(5).map(x=>tDbscanAndJudgeAttri(x, 1000.0, time, 2))
-        var idStopPoints = rdd2.map(x => (x._1,x._2)).filter(x => x._2.size>0).flatMap(x => x._2 map(x._1 -> _)).map(x=>x._1+","+x._2.toString)
-        var idOnlyMove = rdd2.filter(x => x._2.size==0).map( x=> (x._1, x._3)).flatMapValues( x=>x).map(x=>x._1 + "," + x._2.toString)
-        idStopPoints.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterResults/stopAll/"+i)
-        idOnlyMove.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterResults/onlyMove/"+i)
-      }
+    var data = sc.textFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterResults/stopAll/*/*")
+    var results = data.map(x=>parseClusterRes(x)).groupByKey(5)
+      .map(x => DbscanSecond(x,500,2))
+    var allLSP = results.filter(x=>x._2.size>0).map(x=>(x._1,x._2)).flatMapValues(x=>x)
+      .map(x=>x._1+","+x._2.toString)
+    allLSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/allLSP")
+    var onlyLSP = results.filter( x=> (x._2.size>0 && x._3.size==0)).map(x=>(x._1,x._2)).flatMapValues(x=>x)
+      .map(x=>x._1+","+x._2.toString)
+    onlyLSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/onlyLSP")
+    var allTSP = results.filter(x=> x._3.size>0).map(x=>(x._1,x._3)).flatMapValues(x=>x)
+      .map(x=>x._1+","+x._2.toString)
+    allTSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/allTSP")
+    var onlyTSP = results.filter(x=> (x._2.size==0 && x._3.size>0)).map(x=>(x._1,x._3)).flatMapValues(x=>x)
+      .map(x=>x._1+","+x._2.toString)
+    onlyTSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/onlyTSP")
+
     }
 
 
-
-  }
 }
