@@ -563,33 +563,34 @@ object test {
 
 
 //    var activeContinue = sc.textFile("/home/weixiang/continueActive").collect()
-    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/test/secondClusterN2/stopAll/*")
-    var rdd2 = rdd1.map( x=> (x.split(",")(0),x.split(",")(5))).groupByKey(5).mapValues( x=> analyResults(x))
+    var rdd1 = sc.textFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/allLSP/*")
+    var rdd2 = rdd1.map( x=> (x.split(",")(0),x.split(",")(3))).groupByKey(1).mapValues( x=> analyResults(x))
     // home work unkown
-    var oneoneAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 )
-    var oneoneone = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 && x._2._3 == 1)
-    var oneZeroZero = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 0 && x._2._3 == 0)
-    var manyoneAny = rdd2.filter(x => x._2._1 > 1 && x._2._2 == 1)
-    var onemanyAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 > 1 )
+//    var oneoneAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 )
+//    var oneoneone = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 1 && x._2._3 == 1)
+//    var oneZeroZero = rdd2.filter(x => x._2._1 == 1 && x._2._2 == 0 && x._2._3 == 0)
+//    var manyoneAny = rdd2.filter(x => x._2._1 > 1 && x._2._2 == 1)
+//    var onemanyAny = rdd2.filter(x => x._2._1 == 1 && x._2._2 > 1 )
+//
+//    var anyanyOne = rdd2.filter(x => x._2._3 == 1)
+//    var anyanyZero = rdd2.filter(x => x._2._3 ==0)
+//    var anyanyMany = rdd2.filter(x => x._2._3>0)
+    var sl = new ListBuffer[Long]
+//    sl+="oneoneAny: " + oneoneAny.count()
+//    sl+="oneoneone: " + oneoneone.count()
+//    sl+="oneZeroZero: " + oneZeroZero.count()
+//    sl+="manyoneAny: " + manyoneAny.count()
+//    sl+="onemanyAny: " + onemanyAny.count()
+//    sl+="anyanyOne: " + anyanyOne.count()
+//    sl+="anyanyZero: " + anyanyZero.count()
+//    sl+="anyanyMany: " + anyanyMany.count()
+//    sl+="ALL: " + rdd2.count()
 
-    var anyanyOne = rdd2.filter(x => x._2._3 == 1)
-    var anyanyZero = rdd2.filter(x => x._2._3 ==0)
-    var anyanyMany = rdd2.filter(x => x._2._3>0)
-    var sl = new ListBuffer[String]
-    sl+="oneoneAny: " + oneoneAny.count()
-    sl+="oneoneone: " + oneoneone.count()
-    sl+="oneZeroZero: " + oneZeroZero.count()
-    sl+="manyoneAny: " + manyoneAny.count()
-    sl+="onemanyAny: " + onemanyAny.count()
-    sl+="anyanyOne: " + anyanyOne.count()
-    sl+="anyanyZero: " + anyanyZero.count()
-    sl+="anyanyMany: " + anyanyMany.count()
-    sl+="ALL: " + rdd2.count()
-
+    sl += rdd2.count()
     var results = sc.parallelize(sl,1)
-    results.saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/AnalysisResN2")
-    rdd2.repartition(1).map(x=>x._1+","+x._2._1+","+x._2._2+","+x._2._3)
-      .saveAsTextFile("hdfs://bigdata01:9000/home/wx/test/AnalysisResN2/stopAll")
+    results.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/AnalysisResN2/UserSum")
+    rdd2.map(x=>x._1+","+x._2._1+","+x._2._2+","+x._2._3)
+      .saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/AnalysisResN2/allLSP")
 
 
   }
