@@ -46,13 +46,16 @@ object weeks {
       for (d<-times) {
         var result = judgePointAttri(d._1,d._2)
         if (result.equals("work")) {
-          work+=1
+//          work+=1
+          work += (d._2.getTime() - d._1.getTime()) / 1000
         }
         else if (result.equals("home")) {
-          home+=1
+//          home+=1
+          home += (d._2.getTime() - d._1.getTime()) / 1000
         }
         else if (result.equals("unknown")) {
-          unknown+=1
+//          unknown+=1
+          unknown += (d._2.getTime() - d._1.getTime()) / 1000
         }
       }
       if ((home==0 && work==0) || (work+home)*10 < unknown) {
