@@ -46,16 +46,16 @@ object weeks {
       for (d<-times) {
         var result = judgePointAttri(d._1,d._2)
         if (result.equals("work")) {
-//          work+=1
-          work += (d._2.getTime() - d._1.getTime()) / 1000
+          work+=1
+//          work += (d._2.getTime() - d._1.getTime()) / 1000
         }
         else if (result.equals("home")) {
-//          home+=1
-          home += (d._2.getTime() - d._1.getTime()) / 1000
+          home+=1
+//          home += (d._2.getTime() - d._1.getTime()) / 1000
         }
         else if (result.equals("unknown")) {
-//          unknown+=1
-          unknown += (d._2.getTime() - d._1.getTime()) / 1000
+          unknown+=1
+//          unknown += (d._2.getTime() - d._1.getTime()) / 1000
         }
       }
       if ((home==0 && work==0) || (work+home)*10 < unknown) {
@@ -291,23 +291,23 @@ object weeks {
     val conf = new SparkConf().setAppName("weeks").setMaster("spark://bigdata02:7077").set("spark.executor.memory", "128g").set("spark.executor.cores", "32")
     val sc = new SparkContext(conf)
     /**
-      * 两周的数据第一次聚类
+      * 老的第二次聚类, 根据职住属性 划分
       */
     var data = sc.textFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterResults/stopAll/*/*")
-    var results = data.map(x=>parseClusterRes(x)).groupByKey(5)
+    var results = data.map(x=>parseClusterRes(x)).map(x => (x._1 + "_" + x._2.attri, x._2)).groupByKey(5)
       .map(x => DbscanSecond(x,500,2))
     var allLSP = results.filter(x=>x._2.size>0).map(x=>(x._1,x._2)).flatMapValues(x=>x)
-      .map(x=>x._1+","+x._2.toString)
-    allLSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/allLSP")
+      .map(x => x._1.split("_")(0) + "," + x._1.split("_")(1) + "," + x._2.toString)
+    allLSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecondOLD/allLSP")
     var onlyLSP = results.filter( x=> (x._2.size>0 && x._3.size==0)).map(x=>(x._1,x._2)).flatMapValues(x=>x)
-      .map(x=>x._1+","+x._2.toString)
-    onlyLSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/onlyLSP")
+      .map(x => x._1.split("_")(0) + "," + x._1.split("_")(1) + "," + x._2.toString)
+    onlyLSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecondOLD/onlyLSP")
     var allTSP = results.filter(x=> x._3.size>0).map(x=>(x._1,x._3)).flatMapValues(x=>x)
-      .map(x=>x._1+","+x._2.toString)
-    allTSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/allTSP")
+      .map(x => x._1.split("_")(0) + "," + x._1.split("_")(1) + "," + x._2.toString)
+    allTSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecondOLD/allTSP")
     var onlyTSP = results.filter(x=> (x._2.size==0 && x._3.size>0)).map(x=>(x._1,x._3)).flatMapValues(x=>x)
-      .map(x=>x._1+","+x._2.toString)
-    onlyTSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecond/onlyTSP")
+      .map(x => x._1.split("_")(0) + "," + x._1.split("_")(1) + "," + x._2.toString)
+    onlyTSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecondOLD/onlyTSP")
 
     }
 
