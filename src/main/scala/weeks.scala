@@ -242,10 +242,11 @@ object weeks {
   def parseActiveData(line: String) :(String,cellData) = {
     var items = line.split(",")
     val id = items(0)
-    val date = new Date(items(1).replace("CST",""))
-    val lng = items(2).toDouble
-    val lat = items(3).toDouble
-    (id, cellData(id,date,lng,lat))
+    val sdate = new Date(items(1).replace("CST",""))
+    val edate = new Date(items(2).replace("CST",""))
+    val lng = items(3).toDouble
+    val lat = items(4).toDouble
+    (id, cellData(id, sdate, edate, lng, lat))
   }
 
   /**
@@ -278,7 +279,7 @@ object weeks {
 
     DaySet.clear()
     for (data <- cellDatas) {
-      calendar.setTime(data.date)
+      calendar.setTime(data.sdate)
       var day = calendar.get(Calendar.DAY_OF_MONTH)
       DaySet.add(day)
     }
