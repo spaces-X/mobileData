@@ -224,16 +224,18 @@ object test {
   /***
     * 不考虑时间进行neighbors检测
     */
-  def retrieve_neighbors(index_center:Int, df:Array[(Int,Date,Double,Double,Array[Int])],spatial_threshold:Double) ={
-    val res=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
-    val empty=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
+
+  def retrieve_neighbors(index_center:Int, df:Array[(Int,Date,Date,Double,Double,Array[Int])],spatial_threshold:Double) ={
+    val res=new scala.collection.mutable.ArrayBuffer[(Int,Date,Date,Double,Double,Array[Int])]
+    val empty=new scala.collection.mutable.ArrayBuffer[(Int,Date,Date,Double,Double,Array[Int])]
+
     var i = 0
     while(i<df.length){
       if (i==index_center) {
         i+=1
       }
       else {
-        if (calcDis(df(i)._3, df(i)._4, df(index_center)._3, df(index_center)._4)<=spatial_threshold) {
+        if (calcDis(df(i)._4, df(i)._5, df(index_center)._4, df(index_center)._5)<=spatial_threshold) {
           res+=df(i)
         }
         i+=1
@@ -247,10 +249,10 @@ object test {
   }
 
 
-  def retrieve_neighborsT(index_center:Int, df:Array[(Int,Date,Double,Double,Array[Int])],
+  def retrieve_neighborsT(index_center:Int, df:Array[(Int,Date,Date,Double,Double,Array[Int])],
                           spatial_threshold:Double, temporal_threshold:Long)={
-    val res=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
-    val empty=new scala.collection.mutable.ArrayBuffer[(Int,Date,Double,Double,Array[Int])]
+    val res=new scala.collection.mutable.ArrayBuffer[(Int,Date,Date,Double,Double,Array[Int])]
+    val empty=new scala.collection.mutable.ArrayBuffer[(Int,Date,Date,Double,Double,Array[Int])]
     var forward=index_center
     var backward=index_center
     val loop1=new Breaks
@@ -259,7 +261,7 @@ object test {
       while(backward>0)
       {
         backward-=1
-        if(calcDis(df(backward)._3,df(backward)._4,df(index_center)._3,df(index_center)._4)<=spatial_threshold)
+        if(calcDis(df(backward)._4,df(backward)._5,df(index_center)._4,df(index_center)._5)<=spatial_threshold)
         {
           res+=df(backward)
         }
@@ -271,7 +273,7 @@ object test {
       while(forward<df.length-1)
       {
         forward+=1
-        if(calcDis(df(forward)._3,df(forward)._4,df(index_center)._3,df(index_center)._4)<=spatial_threshold)
+        if(calcDis(df(forward)._4,df(forward)._5,df(index_center)._4,df(index_center)._5)<=spatial_threshold)
         {
           res+=df(forward)
         }
@@ -281,22 +283,22 @@ object test {
     }
     res+=df(index_center)
     res.sortBy(x=>x._2)
-//    if(res(res.length-1)._2.getTime-res(0)._2.getTime<temporal_threshold)  // 不关心时间
-//      empty
-    if(res.length<2)
+    if(res(res.length-1)._3.getTime-res(0)._2.getTime<temporal_threshold)
       empty
+//    if(res.length<2) // 不关心邻居的个数 但是关心邻居的时长（上面）
+//      empty
     else
       res.filter(x=>x._1!=index_center)
   }
 
-  case class cellData(id:String,date: Date,lng:Double,lat:Double) {
+  case class cellData(id:String,sdate: Date,edate: Date ,lng:Double,lat:Double) {
     override def toString: String = {
-      id + "," + date.toString + "," + lng + "," + lat
+      id + "," + sdate.toString+ "," + edate.toString + "," + lng + "," + lat
     }
   }
-  case class movePoint(lng:Double,lat:Double,dmove:Date){
+  case class movePoint(lng:Double,lat:Double,smove:Date, emove:Date){
     override def toString: String = {
-      lng+","+lat+","+dmove
+      lng+","+lat+","+ smove.toString() + "," + emove.toString()
     }
   }
 
@@ -313,26 +315,33 @@ object test {
     val df=line._2.map { x =>
       val kind = Array(-1)
       index+=1
-      (index,x.date,x.lng,x.lat,kind)
+      (index,x.sdate,x.edate,x.lng,x.lat,kind)
     }.toArray
 
     for(data<-df)
     {
-      if(data._5(0) == -1) {
+      if(data._6(0) == -1) {
         var neighbor = retrieve_neighborsT(data._1, df, spatial_threshold, temporal_threshold)
-        if(neighbor.length<min_neighbors)
-          data._5(0)=0
-        else if(neighbor(neighbor.length-1)._2.getTime-neighbor
-        (0)._2.getTime<temporal_threshold)
-          data._5(0)=0
+//        if(neighbor.length<min_neighbors)
+//          data._6(0)=0
+        if(neighbor.length < 1) {
+          if (data._3.getTime() - data._2.getTime() >= temporal_threshold){
+            clusterIndex += 1
+            data._6(0) = clusterIndex
+          }
+          else {
+            data._6(0) = 0;
+          }
+
+        }
         else{
 //          neighbor.remove(data._1)
           clusterIndex+=1
-          data._5(0)=clusterIndex
+          data._6(0)=clusterIndex
 
           for(dataNeighbor<-neighbor)
           {
-            dataNeighbor._5(0)=clusterIndex
+            dataNeighbor._6(0)=clusterIndex
             stack.push(dataNeighbor._1)
           }
           while (stack.isEmpty==false)
@@ -341,17 +350,18 @@ object test {
             val newNeighbor=retrieve_neighborsT(cur,df,
               spatial_threshold,temporal_threshold
             )
-            if(newNeighbor.length>=min_neighbors)
+            // ！！！！！！！
+            // 对于找到的新的neighbor 要不要加到簇里 还有待研究
+            // 未来可能将 新加入的点 单独 算一个时间跨度 如果大于阈值的话就会加入  否则不加入
+            for(s<-newNeighbor)
             {
-              for(s<-newNeighbor)
+              if(s._6(0)== -1||s._6(0)==0)
               {
-                if(s._5(0)== -1||s._5(0)==0)
-                {
-                  s._5(0)=clusterIndex
-                  stack.push(s._1)
-                }
+                s._6(0)=clusterIndex
+                stack.push(s._1)
               }
             }
+
           }
         }
       }
@@ -361,22 +371,22 @@ object test {
       停留点：（中心lng,中心lat,(停留开始时间，停留结束时间)，STOP）
       移动点： (lng,lat,（移动发生时间，移动发生时间）,MOVE)
      */
-    val stop=df.groupBy(x=>x._5(0)).filter(x=>x._1!=0).map{x=>
+    val stop=df.groupBy(x=>x._6(0)).filter(x=>x._1!=0).map{x=>
       var clng=0.0
       var clat=0.0
       val l=x._2.sortBy(t=>t._2)
       for(y<-l)
       {
-        clng+=y._3
-        clat+=y._4
+        clng+=y._4
+        clat+=y._5
       }
-      new stopPoint(clng/l.length,clat/l.length,l(0)._2,l(l.length-1)._2,
-        judgePointAttri(l(0)._2,l(l.length-1)._2))
+      new stopPoint(clng/l.length,clat/l.length,l(0)._2,l(l.length-1)._3,
+        judgePointAttri(l(0)._2,l(l.length-1)._3))
     }
 
-    val move=df.filter(x=>x._5(0)==0).map{
+    val move=df.filter(x=>x._6(0)==0).map{
       x=>
-        movePoint(x._3,x._4,x._2)
+        movePoint(x._4, x._5, x._2, x._3)
     }
     //用户id,停留点集合,移动点集合
     (line._1,stop,move)
@@ -401,26 +411,29 @@ object test {
     val df=line._2.map { x =>
       val kind = Array(-1)
       index+=1
-      (index,x.date,x.lng,x.lat,kind)
+      (index,x.sdate, x.edate,x.lng,x.lat,kind)
     }.toArray
 
     for(data<-df)
     {
-      if(data._5(0) == -1) {
+      if(data._6(0) == -1) {
         var neighbor = retrieve_neighbors(data._1, df, spatial_threshold)
         if(neighbor.length<min_neighbors)
-          data._5(0)=0
+          data._6(0)=0
+
+
+
 //        else if(neighbor(neighbor.length-1)._2.getTime-neighbor
 //        (0)._2.getTime<temporal_threshold)
 //          data._5(0)=0
         else{
           //          neighbor.remove(data._1)
           clusterIndex+=1
-          data._5(0)=clusterIndex
+          data._6(0)=clusterIndex
 
           for(dataNeighbor<-neighbor)
           {
-            dataNeighbor._5(0)=clusterIndex
+            dataNeighbor._6(0)=clusterIndex
             stack.push(dataNeighbor._1)
           }
           while (stack.isEmpty==false)
@@ -431,9 +444,9 @@ object test {
             {
               for(s<-newNeighbor)
               {
-                if(s._5(0)== -1||s._5(0)==0)
+                if(s._6(0)== -1||s._6(0)==0)
                 {
-                  s._5(0)=clusterIndex
+                  s._6(0)=clusterIndex
                   stack.push(s._1)
                 }
               }
@@ -447,23 +460,23 @@ object test {
       停留点：（中心lng,中心lat,(停留开始时间，停留结束时间)，STOP）
       移动点： (lng,lat,（移动发生时间，移动发生时间）,MOVE)
      */
-    val stop=df.groupBy(x=>x._5(0)).filter(x=>x._1!=0).map{x=>
+    val stop=df.groupBy(x=>x._6(0)).filter(x=>x._1!=0).map{x=>
       var clng=0.0
       var clat=0.0
       val l=x._2.sortBy(t=>t._2)
       for(y<-l)
       {
-        clng+=y._3
-        clat+=y._4
+        clng+=y._4
+        clat+=y._5
       }
       // 是工作还是在家 通过拼接的key 进行得到
       new stopPoint(clng/l.length,clat/l.length,l(0)._2,l(l.length-1)._2,
         line._1.split("_")(1))
     }
 
-    val move=df.filter(x=>x._5(0)==0).map{
+    val move=df.filter(x=>x._6(0)==0).map{
       x=>
-        movePoint(x._3,x._4,x._2)
+        movePoint(x._4, x._5, x._2, x._3)
     }
     //用户id,停留点集合,移动点集合
     (line._1,stop,move)
@@ -532,10 +545,11 @@ object test {
   def parse(line:String)={
     val pieces=line.split(",")
     val id=pieces(0)
-    val date=new Date(pieces(1).replace("CST",""))
-    val lng=pieces(2).toDouble
-    val lat=pieces(3).toDouble
-    cellData(id,date,lng,lat)
+    val sdate=new Date(pieces(1).replace("CST",""))
+    val edate=new Date(pieces(2).replace("CST",""))
+    val lng=pieces(3).toDouble
+    val lat=pieces(4).toDouble
+    cellData(id,sdate,edate,lng,lat)
   }
 
   def parseClusterRes(line: String) ={
@@ -547,7 +561,7 @@ object test {
     val dateEnd = new Date(items(4).replace("CST",""))
     val attr = items(5)
     var newKey = id+"_"+attr
-    ( newKey, cellData(id, dateStart, lng, lat) )
+    ( newKey, cellData(id, dateStart, dateEnd, lng, lat) )
 //    ( newKey, new stopPoint(lng, lat, dateStart, dateEnd, attr))
   }
 
