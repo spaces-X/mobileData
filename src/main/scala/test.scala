@@ -224,9 +224,11 @@ object test {
   /***
     * 不考虑时间进行neighbors检测
     */
+
   def retrieve_neighbors(index_center:Int, df:Array[(Int,Date,Date,Double,Double,Array[Int])],spatial_threshold:Double) ={
     val res=new scala.collection.mutable.ArrayBuffer[(Int,Date,Date,Double,Double,Array[Int])]
     val empty=new scala.collection.mutable.ArrayBuffer[(Int,Date,Date,Double,Double,Array[Int])]
+
     var i = 0
     while(i<df.length){
       if (i==index_center) {

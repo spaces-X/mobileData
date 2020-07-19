@@ -19,6 +19,7 @@ import scala.util.control.Breaks
 object weeks {
 
   var calendar = Calendar.getInstance()
+  
   case class stableStopPoint(plng:Double, plat:Double,var attr:String="null",var daycount:String="NO" ,times:Iterable[(Date,Date)]) {
     def this(plng:Double, plat:Double,times:Iterable[(Date,Date)])
       = this(plng,plat,"null","NO",times)
@@ -46,6 +47,7 @@ object weeks {
       for (d<-times) {
         var result = judgePointAttri(d._1,d._2)
         if (result.equals("work")) {
+
           work+=1
 //          work += (d._2.getTime() - d._1.getTime()) / 1000
         }
@@ -56,6 +58,7 @@ object weeks {
         else if (result.equals("unknown")) {
           unknown+=1
 //          unknown += (d._2.getTime() - d._1.getTime()) / 1000
+
         }
       }
       if ((home==0 && work==0) || (work+home)*10 < unknown) {
@@ -309,7 +312,6 @@ object weeks {
     var onlyTSP = results.filter(x=> (x._2.size==0 && x._3.size>0)).map(x=>(x._1,x._3)).flatMapValues(x=>x)
       .map(x => x._1.split("_")(0) + "," + x._1.split("_")(1) + "," + x._2.toString)
     onlyTSP.saveAsTextFile("hdfs://bigdata01:9000/home/wx/twoweeks/clusterSecondOLD/onlyTSP")
-
     }
 
 
